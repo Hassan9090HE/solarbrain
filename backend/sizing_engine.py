@@ -680,3 +680,28 @@ if __name__ == "__main__":
         "roof_area_m2":     120,
     })
     print_design(design3)
+print("\nTest 4: Balanced facility — Central Region — On-grid")
+design4 = size_system({
+    "user_type":        "facility",
+    "region":           "central",
+    "grid_scenario":    "on_grid",
+    "monthly_bill_sar": 15000,
+    "peak_load_kw":     150,
+    "operating_hours":  14,
+    "critical_load_pct":20,
+    "building_size_m2": 1800
+})
+print_design(design4)
+
+print("\nTest 5: Strong showcase facility — Central Region — On-grid")
+design5 = size_system({
+    "user_type":        "facility",
+    "region":           "central",
+    "grid_scenario":    "on_grid",
+    "monthly_bill_sar": 18000,
+    "peak_load_kw":     180,
+    "operating_hours":  16,
+    "critical_load_pct":20,
+    "building_size_m2": 2200
+})
+print_design(design5)
