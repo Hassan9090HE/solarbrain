@@ -65,6 +65,54 @@
       "grid_scenario": "both"
     },
     {
+      "id": "panel_t1_jinko_380",
+      "brand": "Jinko Solar",
+      "model": "Eagle 380W",
+      "tier": 1,
+      "power_wp": 380,
+      "efficiency_pct": 19.6,
+      "area_m2": 1.88,
+      "type": "Mono PERC",
+      "warranty_years": 25,
+      "price_sar": 165,
+      "temp_coefficient_pct": -0.35,
+      "available_sa": true,
+      "sec_approved": true,
+      "grid_scenario": "both"
+    },
+    {
+      "id": "panel_t1_rec_405",
+      "brand": "REC Group",
+      "model": "Alpha 405W",
+      "tier": 1,
+      "power_wp": 405,
+      "efficiency_pct": 21.7,
+      "area_m2": 1.82,
+      "type": "HJT",
+      "warranty_years": 25,
+      "price_sar": 235,
+      "temp_coefficient_pct": -0.26,
+      "available_sa": true,
+      "sec_approved": true,
+      "grid_scenario": "both"
+    },
+    {
+      "id": "panel_t1_astronergy_400",
+      "brand": "Astronergy",
+      "model": "CHSM60M-HC 400W",
+      "tier": 1,
+      "power_wp": 400,
+      "efficiency_pct": 20.0,
+      "area_m2": 1.96,
+      "type": "Mono PERC",
+      "warranty_years": 25,
+      "price_sar": 158,
+      "temp_coefficient_pct": -0.35,
+      "available_sa": true,
+      "sec_approved": true,
+      "grid_scenario": "both"
+    },
+    {
       "id": "panel_t2_jinko_580",
       "brand": "Jinko Solar",
       "model": "Tiger Neo 580W",
@@ -124,6 +172,38 @@
       "warranty_years": 30,
       "price_sar": 290,
       "temp_coefficient_pct": -0.29,
+      "available_sa": true,
+      "sec_approved": true,
+      "grid_scenario": "both"
+    },
+    {
+      "id": "panel_t2_runergy_560",
+      "brand": "Runergy",
+      "model": "HM66-HBD 560W",
+      "tier": 2,
+      "power_wp": 560,
+      "efficiency_pct": 21.5,
+      "area_m2": 2.56,
+      "type": "Mono PERC HiDM",
+      "warranty_years": 25,
+      "price_sar": 255,
+      "temp_coefficient_pct": -0.34,
+      "available_sa": true,
+      "sec_approved": true,
+      "grid_scenario": "both"
+    },
+    {
+      "id": "panel_t2_suntech_570",
+      "brand": "Suntech",
+      "model": "Ultra V Pro 570W",
+      "tier": 2,
+      "power_wp": 570,
+      "efficiency_pct": 21.7,
+      "area_m2": 2.57,
+      "type": "Mono PERC",
+      "warranty_years": 25,
+      "price_sar": 260,
+      "temp_coefficient_pct": -0.34,
       "available_sa": true,
       "sec_approved": true,
       "grid_scenario": "both"
@@ -193,7 +273,6 @@
       "grid_scenario": "both"
     }
   ],
-
   "inverters": [
     {
       "id": "inv_t1_sungrow_5",
@@ -252,6 +331,81 @@
       "price_sar": 6200,
       "max_pv_input_kw": 7.0,
       "grid_scenario": "off_grid",
+      "available_sa": true,
+      "sec_approved": true
+    },
+    {
+      "id": "inv_t1_sma_3",
+      "brand": "SMA",
+      "model": "Sunny Boy 3.0",
+      "tier": 1,
+      "capacity_kw": 3,
+      "type": "grid_tie",
+      "efficiency_pct": 97.2,
+      "warranty_years": 10,
+      "price_sar": 2800,
+      "max_pv_input_kw": 4.5,
+      "grid_scenario": "on_grid",
+      "available_sa": true,
+      "sec_approved": true
+    },
+    {
+      "id": "inv_t1_fronius_5",
+      "brand": "Fronius",
+      "model": "Primo 5.0-1",
+      "tier": 1,
+      "capacity_kw": 5,
+      "type": "grid_tie",
+      "efficiency_pct": 97.8,
+      "warranty_years": 10,
+      "price_sar": 3600,
+      "max_pv_input_kw": 7.5,
+      "grid_scenario": "on_grid",
+      "available_sa": true,
+      "sec_approved": true
+    },
+    {
+      "id": "inv_t1_solax_6",
+      "brand": "SolaX Power",
+      "model": "X1-Hybrid 6.0",
+      "tier": 1,
+      "capacity_kw": 6,
+      "type": "hybrid",
+      "efficiency_pct": 97.6,
+      "warranty_years": 10,
+      "price_sar": 5100,
+      "max_pv_input_kw": 9.0,
+      "grid_scenario": "both",
+      "available_sa": true,
+      "sec_approved": true
+    },
+    {
+      "id": "inv_t1_deye_8",
+      "brand": "Deye",
+      "model": "SUN-8K-SG04LP1",
+      "tier": 1,
+      "capacity_kw": 8,
+      "type": "hybrid",
+      "efficiency_pct": 97.0,
+      "warranty_years": 5,
+      "price_sar": 5800,
+      "max_pv_input_kw": 12.0,
+      "grid_scenario": "both",
+      "available_sa": true,
+      "sec_approved": true
+    },
+    {
+      "id": "inv_t1_solaredge_10",
+      "brand": "SolarEdge",
+      "model": "SE10K-RW0TEBEN4",
+      "tier": 1,
+      "capacity_kw": 10,
+      "type": "grid_tie",
+      "efficiency_pct": 99.2,
+      "warranty_years": 12,
+      "price_sar": 9800,
+      "max_pv_input_kw": 15.0,
+      "grid_scenario": "on_grid",
       "available_sa": true,
       "sec_approved": true
     },
@@ -316,6 +470,36 @@
       "sec_approved": true
     },
     {
+      "id": "inv_t2_sungrow_60",
+      "brand": "Sungrow",
+      "model": "SG60CX",
+      "tier": 2,
+      "capacity_kw": 60,
+      "type": "grid_tie",
+      "efficiency_pct": 98.9,
+      "warranty_years": 10,
+      "price_sar": 26000,
+      "max_pv_input_kw": 90,
+      "grid_scenario": "on_grid",
+      "available_sa": true,
+      "sec_approved": true
+    },
+    {
+      "id": "inv_t2_goodwe_80",
+      "brand": "GoodWe",
+      "model": "GW80KN-MT",
+      "tier": 2,
+      "capacity_kw": 80,
+      "type": "grid_tie",
+      "efficiency_pct": 98.7,
+      "warranty_years": 10,
+      "price_sar": 31000,
+      "max_pv_input_kw": 120,
+      "grid_scenario": "on_grid",
+      "available_sa": true,
+      "sec_approved": true
+    },
+    {
       "id": "inv_t3_huawei_215",
       "brand": "Huawei",
       "model": "SUN2000-215KTL",
@@ -376,7 +560,6 @@
       "sec_approved": true
     }
   ],
-
   "batteries": [
     {
       "id": "bat_t1_pylontech_us2000",
@@ -413,6 +596,23 @@
       "available_sa": true
     },
     {
+      "id": "bat_t1_pylontech_us3000",
+      "brand": "Pylontech",
+      "model": "US3000C",
+      "tier": 1,
+      "capacity_kwh": 3.5,
+      "chemistry": "LiFePO4",
+      "cycle_life": 6000,
+      "dod_pct": 80,
+      "warranty_years": 10,
+      "price_sar": 4800,
+      "voltage_v": 48,
+      "max_charge_kw": 1.5,
+      "max_discharge_kw": 1.5,
+      "grid_scenario": "both",
+      "available_sa": true
+    },
+    {
       "id": "bat_t1_byd_hvs10",
       "brand": "BYD",
       "model": "Battery-Box Premium HVS 10",
@@ -443,6 +643,74 @@
       "voltage_v": 100,
       "max_charge_kw": 7.5,
       "max_discharge_kw": 7.5,
+      "grid_scenario": "both",
+      "available_sa": true
+    },
+    {
+      "id": "bat_t1_sonnen_10",
+      "brand": "Sonnen",
+      "model": "sonnenBatterie 10",
+      "tier": 1,
+      "capacity_kwh": 10.0,
+      "chemistry": "LiFePO4",
+      "cycle_life": 10000,
+      "dod_pct": 90,
+      "warranty_years": 10,
+      "price_sar": 22000,
+      "voltage_v": 48,
+      "max_charge_kw": 3.3,
+      "max_discharge_kw": 3.3,
+      "grid_scenario": "both",
+      "available_sa": true
+    },
+    {
+      "id": "bat_t1_growatt_arbe10",
+      "brand": "Growatt",
+      "model": "ARK 10H-A1",
+      "tier": 1,
+      "capacity_kwh": 10.24,
+      "chemistry": "LiFePO4",
+      "cycle_life": 6000,
+      "dod_pct": 90,
+      "warranty_years": 10,
+      "price_sar": 13500,
+      "voltage_v": 48,
+      "max_charge_kw": 5.0,
+      "max_discharge_kw": 5.0,
+      "grid_scenario": "both",
+      "available_sa": true
+    },
+    {
+      "id": "bat_t2_pylontech_force_l2_20",
+      "brand": "Pylontech",
+      "model": "FORCE L2 20kWh",
+      "tier": 2,
+      "capacity_kwh": 20.0,
+      "chemistry": "LiFePO4",
+      "cycle_life": 6000,
+      "dod_pct": 90,
+      "warranty_years": 10,
+      "price_sar": 24000,
+      "voltage_v": 48,
+      "max_charge_kw": 10.0,
+      "max_discharge_kw": 10.0,
+      "grid_scenario": "both",
+      "available_sa": true
+    },
+    {
+      "id": "bat_t2_growatt_arke_30",
+      "brand": "Growatt",
+      "model": "ARK 30H-A1",
+      "tier": 2,
+      "capacity_kwh": 30.72,
+      "chemistry": "LiFePO4",
+      "cycle_life": 6000,
+      "dod_pct": 90,
+      "warranty_years": 10,
+      "price_sar": 36000,
+      "voltage_v": 48,
+      "max_charge_kw": 15.0,
+      "max_discharge_kw": 15.0,
       "grid_scenario": "both",
       "available_sa": true
     },
@@ -515,6 +783,40 @@
       "available_sa": true
     },
     {
+      "id": "bat_t2_byd_cube100",
+      "brand": "BYD",
+      "model": "MC Cube-T 100kWh",
+      "tier": 2,
+      "capacity_kwh": 100.0,
+      "chemistry": "LiFePO4",
+      "cycle_life": 8000,
+      "dod_pct": 90,
+      "warranty_years": 10,
+      "price_sar": 128000,
+      "voltage_v": 614,
+      "max_charge_kw": 50.0,
+      "max_discharge_kw": 50.0,
+      "grid_scenario": "both",
+      "available_sa": true
+    },
+    {
+      "id": "bat_t2_pylontech_force_h2",
+      "brand": "Pylontech",
+      "model": "FORCE H2 100kWh",
+      "tier": 2,
+      "capacity_kwh": 100.0,
+      "chemistry": "LiFePO4",
+      "cycle_life": 6000,
+      "dod_pct": 90,
+      "warranty_years": 10,
+      "price_sar": 118000,
+      "voltage_v": 614,
+      "max_charge_kw": 50.0,
+      "max_discharge_kw": 50.0,
+      "grid_scenario": "both",
+      "available_sa": true
+    },
+    {
       "id": "bat_t3_byd_cube500",
       "brand": "BYD",
       "model": "MC Cube-T 500kWh",
@@ -583,7 +885,6 @@
       "available_sa": true
     }
   ],
-
   "regions": {
     "eastern": {
       "name": "Eastern Region",
@@ -601,7 +902,6 @@
       "ghi_kwh_m2_day": 5.8
     }
   },
-
   "tariffs": {
     "facility": {
       "rate_sar_kwh": 0.26,
@@ -622,7 +922,6 @@
       "export_rate_sar_kwh": 0.09
     }
   },
-
   "derating_factors": {
     "temp_derating": 0.82,
     "soiling_factor": 0.93,
@@ -630,7 +929,6 @@
     "annual_degradation": 0.99,
     "performance_ratio": 0.655
   },
-
   "sizing_constants": {
     "safety_factor_on_grid": 1.2,
     "safety_factor_off_grid": 1.35,
@@ -642,7 +940,6 @@
     "diesel_consumption_lph_per_kva": 0.25,
     "diesel_price_sar_per_liter": 0.75
   },
-
   "protection_items": {
     "dc_mcb": {
       "description": "DC Miniature Circuit Breaker",

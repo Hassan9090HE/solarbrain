@@ -218,7 +218,7 @@ def simulate_scenario(req: ScenarioRequest):
         "season_summer", "season_moderate", "season_winter", "season_reset",
         "load_spike", "load_restore",
         "cloud_cover", "cloud_restore",
-        "low_battery"
+        "low_battery", "low_battery_restore"
     }
     if req.scenario not in valid:
         raise HTTPException(status_code=400, detail=f"Unknown scenario: {req.scenario}")

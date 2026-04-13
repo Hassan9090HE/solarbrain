@@ -339,26 +339,35 @@ def size_system(profile: dict) -> dict:
     derating         = components["derating_factors"]
     constants        = components["sizing_constants"]
 
-    # ── Step 2: Derive daily load ──────────────────────────────────────────
+    # ── Step 2: Derive daily load (residential branch patched) ───────────
     rate             = tariff["rate_sar_kwh"]
-    daily_load_kwh   = (monthly_bill / rate) / 30
+    monthly_bill_local = monthly_bill
 
-    # Peak load
-    if "peak_load_kw" in profile and profile["peak_load_kw"]:
-        peak_load_kw = float(profile["peak_load_kw"])
+    if user_type == "residential":
+        # Residential: lower coincidence factor, AC-based peak when available
+        daily_load_kwh = (monthly_bill_local / rate) / 30
+        if profile.get("ac_units"):
+            ac_units     = int(profile["ac_units"])
+            ac_kw        = ac_units * 2.5 * 0.70    # 0.70 coincidence factor
+            base_kw      = 1.5 + (0.3 * ac_units)
+            peak_load_kw = round(min(max(ac_kw + base_kw, 2.0), 30.0), 1)
+            daily_load_kwh = round(peak_load_kw * 24 * 0.50, 1)
+        else:
+            avg_hours    = 8.0
+            peak_load_kw = round(min(max((daily_load_kwh / avg_hours) * 0.6 * constants["peak_load_factor"], 2.0), 30.0), 1)
     elif user_type == "farm" and profile.get("pump_power_kw"):
         pump_kw          = float(profile["pump_power_kw"])
         pump_hours       = float(profile.get("pump_hours_day", 8))
         daily_load_kwh   = pump_kw * pump_hours
-        peak_load_kw     = pump_kw
-    elif user_type == "residential" and profile.get("ac_units"):
-        ac_kw            = float(profile["ac_units"]) * 2.5   # 2.5 kW per AC unit
-        peak_load_kw     = ac_kw * 1.3
+        peak_load_kw     = round(pump_kw, 2)
     else:
-        peak_load_kw = (daily_load_kwh / operating_hours) * constants["peak_load_factor"]
+        daily_load_kwh   = (monthly_bill_local / rate) / 30
+        if profile.get("peak_load_kw"):
+            peak_load_kw = float(profile["peak_load_kw"])
+        else:
+            peak_load_kw = round((daily_load_kwh / operating_hours) * constants["peak_load_factor"], 2)
 
-    peak_load_kw = round(peak_load_kw, 2)
-    tier         = get_tier(peak_load_kw)
+    tier = get_tier(peak_load_kw)
 
     # ── Step 3: PV array sizing ────────────────────────────────────────────
     perf_ratio   = derating["performance_ratio"]      # 0.655
@@ -369,15 +378,32 @@ def size_system(profile: dict) -> dict:
     pv_kwp_required = (daily_load_kwh / (ghi * perf_ratio)) * safety
     pv_kwp_required = round(pv_kwp_required, 2)
 
-    # ── Step 4: Battery sizing ─────────────────────────────────────────────
-    autonomy_h   = (constants["autonomy_hours_on_grid"]
-                    if grid_scenario == "on_grid"
-                    else constants["autonomy_hours_off_grid"])
-
-    # Use best available battery DoD for calculation (we use 90% as default)
+    # ── Step 4: Battery sizing (patched — residential + farm branches) ────────
     default_dod  = 0.90
-    batt_kwh_req = (peak_load_kw * autonomy_h) / default_dod
-    batt_kwh_req = round(batt_kwh_req, 2)
+    if user_type == "residential":
+        # Residential on-grid: size for essential load only, 3.5h
+        # This prevents oversized battery for homes
+        essential_kw = min(peak_load_kw * (critical_pct / 100), 5.0)
+        batt_kwh_req = round(max(5.0, min((essential_kw * 3.5) / default_dod, 20.0)), 2)
+    elif user_type == "farm" and grid_scenario == "on_grid":
+        # Farm on-grid: pumps run during daylight; battery covers short outages only.
+        # Size for 1.5h of essential/critical load — not full overnight autonomy.
+        # Critical load typically = pump starter surge + control systems (~25%).
+        farm_essential_kw = peak_load_kw * min(critical_pct / 100, 0.25)
+        batt_kwh_req = round(max(10.0, min((farm_essential_kw * 1.5) / default_dod, 80.0)), 2)
+        autonomy_h   = 1.5
+    elif user_type == "farm" and grid_scenario == "off_grid":
+        # Farm off-grid: needs overnight cover for control systems + next-morning pump start.
+        # Use 8h autonomy at critical load fraction — not full peak load overnight.
+        farm_essential_kw = peak_load_kw * min(critical_pct / 100, 0.30)
+        batt_kwh_req = round(max(20.0, min((farm_essential_kw * 8.0) / default_dod, 300.0)), 2)
+        autonomy_h   = 8.0
+    elif grid_scenario == "off_grid":
+        autonomy_h   = constants["autonomy_hours_off_grid"]   # 60h
+        batt_kwh_req = round(max(5.0, (peak_load_kw * autonomy_h) / default_dod), 2)
+    else:
+        autonomy_h   = constants["autonomy_hours_on_grid"]    # 5h
+        batt_kwh_req = round(max(5.0, (peak_load_kw * autonomy_h) / default_dod), 2)
 
     # ── Step 5: Inverter sizing ────────────────────────────────────────────
     inv_kw_req   = peak_load_kw * constants["inverter_oversize_factor"]
@@ -436,8 +462,10 @@ def size_system(profile: dict) -> dict:
 
     for bat in top_batteries:
         dod            = bat["dod_pct"] / 100
-        kwh_req_actual = (peak_load_kw * autonomy_h) / dod
-        bat["units_required"]   = math.ceil(kwh_req_actual / bat["capacity_kwh"])
+        # Use batt_kwh_req (already computed per user_type/scenario above)
+        kwh_req_actual = batt_kwh_req / dod * 0.90   # normalize back to kWh needed
+        kwh_req_actual = max(batt_kwh_req, kwh_req_actual)
+        bat["units_required"]   = math.ceil(batt_kwh_req / bat["capacity_kwh"])
         bat["actual_kwh"]       = round(bat["units_required"] * bat["capacity_kwh"], 1)
         bat["floor_soc_pct"]    = round((1 - dod) * 100, 1)
         bat["battery_cost_sar"] = bat["units_required"] * bat["price_sar"]
@@ -479,6 +507,16 @@ def size_system(profile: dict) -> dict:
     )
 
     # ── Assemble output ────────────────────────────────────────────────────
+    # Ensure autonomy_h is always defined for output
+    if user_type == "residential":
+        autonomy_h = 3.5
+    elif user_type == "farm":
+        pass  # autonomy_h already set in farm battery branch above
+    elif grid_scenario == "off_grid":
+        autonomy_h = constants["autonomy_hours_off_grid"]
+    else:
+        autonomy_h = constants["autonomy_hours_on_grid"]
+
     system_design = {
         # Input summary
         "profile": {
@@ -680,28 +718,3 @@ if __name__ == "__main__":
         "roof_area_m2":     120,
     })
     print_design(design3)
-print("\nTest 4: Balanced facility — Central Region — On-grid")
-design4 = size_system({
-    "user_type":        "facility",
-    "region":           "central",
-    "grid_scenario":    "on_grid",
-    "monthly_bill_sar": 15000,
-    "peak_load_kw":     150,
-    "operating_hours":  14,
-    "critical_load_pct":20,
-    "building_size_m2": 1800
-})
-print_design(design4)
-
-print("\nTest 5: Strong showcase facility — Central Region — On-grid")
-design5 = size_system({
-    "user_type":        "facility",
-    "region":           "central",
-    "grid_scenario":    "on_grid",
-    "monthly_bill_sar": 18000,
-    "peak_load_kw":     180,
-    "operating_hours":  16,
-    "critical_load_pct":20,
-    "building_size_m2": 2200
-})
-print_design(design5)
