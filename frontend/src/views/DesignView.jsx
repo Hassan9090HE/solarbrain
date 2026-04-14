@@ -236,15 +236,14 @@ function buildSnapshot({ systemDesign, panel, inverter, battery }) {
 }
 
 // ── Payload builder ───────────────────────────────────────────────────────────
-function buildPayload(form, isOffGrid) {
+function buildPayload(form) {
   const p = {
     user_type:         form.user_type,
     region:            form.region,
-    grid_scenario:     form.grid_scenario,
+    grid_scenario:     'on_grid',
     monthly_bill_sar:  Number(form.monthly_bill_sar),
     operating_hours:   Number(form.operating_hours) || 10,
     critical_load_pct: Number(form.critical_load_pct) || 30,
-    has_generator:     isOffGrid ? Boolean(form.has_generator) : false,
   }
   if (form.peak_load_kw)     p.peak_load_kw     = Number(form.peak_load_kw)
   if (form.building_size_m2) p.building_size_m2 = Number(form.building_size_m2)
@@ -252,7 +251,6 @@ function buildPayload(form, isOffGrid) {
   if (form.pump_power_kw)    p.pump_power_kw    = Number(form.pump_power_kw)
   if (form.pump_hours_day)   p.pump_hours_day   = Number(form.pump_hours_day)
   if (form.ac_units)         p.ac_units         = Number(form.ac_units)
-  if (form.generator_kva)    p.generator_kva    = Number(form.generator_kva)
   return p
 }
 
@@ -525,18 +523,55 @@ function PaybackPanel({ snap }) {
   const [open, setOpen] = useState(false)
   if (!snap?.financials || !snap?.capexBreakdown) return null
 
-  const capex    = snap.capexBreakdown.total
-  const yr1      = snap.financials.year_1_savings_sar
-  const yr10net  = snap.financials.net_10yr_benefit_sar
-  const yr10cum  = snap.financials.year_10_savings_sar
+  const capex      = snap.capexBreakdown.total
+  const fin        = snap.financials
+  const yearlyData = fin.yearly_data || []
+  const yr10net    = fin.net_10yr_benefit_sar
+  const yr10cum    = fin.year_10_savings_sar
 
-  if (!yr1 || yr1 <= 0) return null
+  // ── Payback: interpolated from yearly_data — same source as chart and banner ──
+  // Find the two consecutive years that straddle the break-even point
+  // (i.e. where cumulative savings cross CAPEX), then linearly interpolate.
+  // This produces a decimal result that is mathematically consistent with the
+  // integer break_even_year from computeFinancials and the chart intersection.
+  //
+  // Example: if savings at Yr 4 = 1.6M and savings at Yr 5 = 2.1M, CAPEX = 1.8M:
+  //   fraction = (1.8M - 1.6M) / (2.1M - 1.6M) = 0.40
+  //   payback  = 4 + 0.40 = 4.4 years  →  banner shows "Year 5", chart crosses between Yr4-Yr5
+  let paybackYears = null
+  let paybackCalcNote = ''
 
-  const simplePayback = +(capex / yr1).toFixed(1)           // years
-  const roi10yr       = +((yr10net / capex) * 100).toFixed(1) // %
-  const irr_approx    = +(((yr10cum / capex) ** (1 / 10) - 1) * 100).toFixed(1) // simple CAGR proxy
+  if (yearlyData.length > 0) {
+    // Find the first year where cumulative savings >= CAPEX
+    const beyIdx = yearlyData.findIndex(d => d.cumulative_savings_sar >= capex)
+    if (beyIdx === 0) {
+      // Paid back within Year 1
+      const fraction = capex / yearlyData[0].cumulative_savings_sar
+      paybackYears = +(fraction).toFixed(1)
+      paybackCalcNote = `Payback within Year 1 (CAPEX ÷ Yr1 cumulative savings)`
+    } else if (beyIdx > 0) {
+      const prevYr   = yearlyData[beyIdx - 1]
+      const crossYr  = yearlyData[beyIdx]
+      const savingsNeeded  = capex - prevYr.cumulative_savings_sar
+      const savingsInYear  = crossYr.cumulative_savings_sar - prevYr.cumulative_savings_sar
+      const fraction = savingsNeeded / savingsInYear
+      paybackYears = +(prevYr.year + fraction).toFixed(1)
+      paybackCalcNote = `Yr ${prevYr.year} savings: ${prevYr.cumulative_savings_sar.toLocaleString()} SAR → need ${savingsNeeded.toLocaleString()} more → ${(fraction * 100).toFixed(0)}% into Year ${crossYr.year}`
+    } else {
+      // Break-even not reached within 10 years — use simple linear projection from Yr1
+      const yr1Annual = yearlyData[0]?.total_savings_sar || 1
+      paybackYears = +(capex / yr1Annual).toFixed(1)
+      paybackCalcNote = `Break-even beyond Year 10 — linear projection from Year 1 savings`
+    }
+  }
 
-  const isGood = simplePayback <= 7
+  const roi10yr    = yr10net != null && capex > 0 ? +((yr10net / capex) * 100).toFixed(1) : null
+  const irr_approx = yr10cum != null && capex > 0 && yr10cum > 0
+    ? +(((yr10cum / capex) ** (1 / 10) - 1) * 100).toFixed(1)
+    : null
+
+  const bey        = fin.break_even_year
+  const isGood     = paybackYears != null && paybackYears <= 8
 
   return (
     <div style={{ marginTop: 14, padding: '14px 16px', background: '#F4F6F8', borderRadius: 8, border: '0.5px solid #D1D5DB' }}>
@@ -544,22 +579,27 @@ function PaybackPanel({ snap }) {
         <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>Investment returns</div>
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: isGood ? '#1D9E75' : '#BA7517' }}>
-              {simplePayback} yrs
+            <div style={{ fontSize: 18, fontWeight: 700, color: paybackYears == null ? '#9CA3AF' : isGood ? '#1D9E75' : '#BA7517' }}>
+              {paybackYears != null ? `${paybackYears} yrs` : '>10 yrs'}
             </div>
-            <div style={{ fontSize: 10, color: '#6B7280' }}>Simple payback</div>
+            <div style={{ fontSize: 10, color: '#6B7280' }}>Payback period</div>
+            {bey && (
+              <div style={{ fontSize: 9, color: '#9CA3AF', marginTop: 2 }}>
+                (full year: {bey})
+              </div>
+            )}
           </div>
           <div style={{ width: '0.5px', background: '#D1D5DB' }} />
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: roi10yr >= 0 ? '#1D9E75' : '#A32D2D' }}>
-              {roi10yr >= 0 ? '+' : ''}{roi10yr}%
+            <div style={{ fontSize: 18, fontWeight: 700, color: roi10yr != null && roi10yr >= 0 ? '#1D9E75' : '#A32D2D' }}>
+              {roi10yr != null ? `${roi10yr >= 0 ? '+' : ''}${roi10yr}%` : '—'}
             </div>
             <div style={{ fontSize: 10, color: '#6B7280' }}>10yr ROI</div>
           </div>
           <div style={{ width: '0.5px', background: '#D1D5DB' }} />
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#185FA5' }}>
-              ~{irr_approx}%
+              {irr_approx != null ? `~${irr_approx}%` : '—'}
             </div>
             <div style={{ fontSize: 10, color: '#6B7280' }}>Ann. return (CAGR)</div>
           </div>
@@ -577,24 +617,55 @@ function PaybackPanel({ snap }) {
       {open && (
         <div style={{ marginTop: 10, background: '#fff', borderRadius: 6, padding: '12px 14px', border: '0.5px solid #E5E7EB', fontSize: 11 }}>
           <div style={{ fontWeight: 600, color: '#111827', marginBottom: 8 }}>Calculation details</div>
-          {[
-            ['Total CAPEX',         `${capex.toLocaleString()} SAR`, 'Sum of all equipment + installation costs'],
-            ['Year 1 annual savings',`${yr1.toLocaleString()} SAR`,  snap.userType === 'facility' ? 'Energy savings + demand charge savings' : 'Energy savings from solar production'],
-            ['Simple payback',       `${capex.toLocaleString()} ÷ ${yr1.toLocaleString()} = ${simplePayback} years`, 'CAPEX divided by Year 1 annual savings'],
-            ['10yr net benefit',     `${yr10net >= 0 ? '+' : ''}${yr10net.toLocaleString()} SAR`, 'Cumulative 10yr savings minus CAPEX'],
-            ['10yr ROI',             `(${yr10net.toLocaleString()} ÷ ${capex.toLocaleString()}) × 100 = ${roi10yr}%`, 'Net benefit as % of initial investment'],
-            ['Ann. return (CAGR)',   `(${yr10cum.toLocaleString()} ÷ ${capex.toLocaleString()})^(1/10) − 1 = ${irr_approx}%`, 'Proxy for annualised return — not a true IRR'],
-          ].map(([label, calc, note]) => (
-            <div key={label} style={{ borderBottom: '0.5px solid #F3F4F6', paddingBottom: 7, marginBottom: 7 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6B7280' }}>{label}</span>
-                <span style={{ fontFamily: 'monospace', color: '#374151' }}>{calc}</span>
-              </div>
-              <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{note}</div>
+
+          {/* Payback explanation */}
+          <div style={{ borderBottom: '0.5px solid #F3F4F6', paddingBottom: 7, marginBottom: 7 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6B7280' }}>Total CAPEX</span>
+              <span style={{ fontFamily: 'monospace', color: '#374151' }}>{capex.toLocaleString()} SAR</span>
             </div>
-          ))}
-          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 6, lineHeight: 1.5 }}>
-            Assumptions: panel degradation 1%/yr, stable tariff rates, no O&amp;M costs modelled.
+            <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Sum of all equipment + installation costs</div>
+          </div>
+
+          <div style={{ borderBottom: '0.5px solid #F3F4F6', paddingBottom: 7, marginBottom: 7 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6B7280' }}>Payback period</span>
+              <span style={{ fontFamily: 'monospace', color: '#374151' }}>{paybackYears != null ? `${paybackYears} years` : '>10 years'}</span>
+            </div>
+            <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
+              {paybackCalcNote}<br/>
+              Interpolated from cumulative savings — same data as the break-even banner (Year {bey || '>'}) and the chart intersection.
+              The decimal shows precisely where within that year the crossover occurs.
+            </div>
+          </div>
+
+          {roi10yr != null && (
+            <div style={{ borderBottom: '0.5px solid #F3F4F6', paddingBottom: 7, marginBottom: 7 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6B7280' }}>10yr ROI</span>
+                <span style={{ fontFamily: 'monospace', color: '#374151' }}>
+                  ({yr10net >= 0 ? '+' : ''}{yr10net?.toLocaleString()} ÷ {capex.toLocaleString()}) × 100 = {roi10yr}%
+                </span>
+              </div>
+              <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>10yr net benefit as % of initial CAPEX investment</div>
+            </div>
+          )}
+
+          {irr_approx != null && (
+            <div style={{ paddingBottom: 7, marginBottom: 7 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6B7280' }}>Ann. return (CAGR)</span>
+                <span style={{ fontFamily: 'monospace', color: '#374151' }}>
+                  ({yr10cum?.toLocaleString()} ÷ {capex.toLocaleString()})^(1/10) − 1 = {irr_approx}%
+                </span>
+              </div>
+              <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Proxy for annualised return — not a true IRR (ignores reinvestment rate)</div>
+            </div>
+          )}
+
+          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 6, lineHeight: 1.5, borderTop: '0.5px solid #F3F4F6', paddingTop: 7 }}>
+            All values derived from the same yearly financial model as the break-even banner and 10-year chart.
+            Panel degradation 1%/yr applied. Stable tariff rates assumed. No O&amp;M costs modelled.
             These are indicative estimates — not investment-grade financial analysis.
           </div>
         </div>
@@ -606,11 +677,26 @@ function PaybackPanel({ snap }) {
 // ── PDF / Print summary ───────────────────────────────────────────────────────
 function handlePrint(snap, systemDesign) {
   if (!snap) return
-  const fin   = snap.financials
-  const capex = snap.capexBreakdown.total
-  const yr1   = fin.year_1_savings_sar || 1
-  const payback = (capex / yr1).toFixed(1)
-  const roi10   = (((fin.net_10yr_benefit_sar) / capex) * 100).toFixed(1)
+  const fin        = snap.financials
+  const capex      = snap.capexBreakdown.total
+  const yearlyData = fin.yearly_data || []
+  const roi10      = fin.net_10yr_benefit_sar != null && capex > 0
+    ? (((fin.net_10yr_benefit_sar) / capex) * 100).toFixed(1)
+    : '—'
+
+  // Same interpolated payback logic as PaybackPanel — consistent with banner and chart
+  let payback = '>10'
+  const beyIdx = yearlyData.findIndex(d => d.cumulative_savings_sar >= capex)
+  if (beyIdx === 0) {
+    payback = (capex / yearlyData[0].cumulative_savings_sar).toFixed(1)
+  } else if (beyIdx > 0) {
+    const prev = yearlyData[beyIdx - 1]
+    const curr = yearlyData[beyIdx]
+    const fraction = (capex - prev.cumulative_savings_sar) / (curr.cumulative_savings_sar - prev.cumulative_savings_sar)
+    payback = (prev.year + fraction).toFixed(1)
+  } else if (yearlyData.length > 0) {
+    payback = (capex / (yearlyData[0]?.total_savings_sar || 1)).toFixed(1)
+  }
 
   const html = `<!DOCTYPE html>
 <html>
@@ -752,7 +838,6 @@ export default function DesignView() {
   const setF    = (k, v) => setFormValues(prev => ({ ...prev, [k]: v }))
   const isRes   = form.user_type === 'residential'
   const isFarm  = form.user_type === 'farm'
-  const isOffGrid = form.grid_scenario === 'off_grid'
 
   // ── Stage A: Generate Base Design ─────────────────────────────────────
   async function handleGenerateBase(e) {
@@ -760,7 +845,7 @@ export default function DesignView() {
     setDesignLoading(true)
     setDesignError(null)
     try {
-      const data = await submitDesign(buildPayload(form, isOffGrid))
+      const data = await submitDesign(buildPayload(form))
       setSystemDesign(data.system_design)
       applyDefaultSelections(data.system_design)
       setDesignStage('base')
@@ -841,11 +926,10 @@ export default function DesignView() {
               </div>
               <div style={S.formGroup}>
                 <label style={S.label}>Grid scenario</label>
-                <select style={S.select} value={form.grid_scenario} onChange={e => setF('grid_scenario', e.target.value)} disabled={isRes}>
+                <select style={S.select} value="on_grid" disabled>
                   <option value="on_grid">On-grid (grid-connected)</option>
-                  {!isRes && <option value="off_grid">Off-grid (standalone)</option>}
                 </select>
-                {isRes && <span style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>Residential is on-grid only</span>}
+                <span style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>On-grid only</span>
               </div>
             </div>
 
@@ -896,23 +980,6 @@ export default function DesignView() {
                   <label style={S.label}>Roof area m² (optional)</label>
                   <input style={S.input} type="number" min="0" value={form.roof_area_m2} onChange={e => setF('roof_area_m2', e.target.value)} />
                 </div>}
-              </div>
-            )}
-
-            {isOffGrid && (
-              <div style={{ ...S.grid2, marginBottom: 16 }}>
-                <div style={S.formGroup}>
-                  <label style={S.label}>
-                    <input type="checkbox" checked={form.has_generator} onChange={e => setF('has_generator', e.target.checked)} style={{ marginRight: 6 }} />
-                    Include diesel generator backup
-                  </label>
-                </div>
-                {form.has_generator && (
-                  <div style={S.formGroup}>
-                    <label style={S.label}>Generator kVA (optional)</label>
-                    <input style={S.input} type="number" min="0" placeholder="System will recommend" value={form.generator_kva} onChange={e => setF('generator_kva', e.target.value)} />
-                  </div>
-                )}
               </div>
             )}
 
