@@ -6,7 +6,7 @@
 
 import axios from 'axios'
 
-const BASE = 'http://localhost:8000'
+const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 const api = axios.create({ baseURL: BASE })
 
@@ -73,3 +73,5 @@ export async function healthCheck() {
   const res = await api.get('/health')
   return res.data
 }
+
+export default api
