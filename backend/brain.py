@@ -474,6 +474,8 @@ class Brain:
             self.load_spike_kw = 0.0
         elif scenario == "low_battery":
             self.battery_soc = self.floor_soc + 2
+        elif scenario == "low_battery_restore":
+            self.battery_soc = 80.0
 
 
 # ══════════════════════════════════════════════════════════════════════════════

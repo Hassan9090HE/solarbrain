@@ -117,36 +117,30 @@ function SourceBlock({ name, kw, colorKey }) {
 }
 
 // ── Scenario definitions ──────────────────────────────────────────────────────
+// Weather scenarios are mutually exclusive — only one can be active at a time.
+const WEATHER_SCENARIO_IDS = new Set(['season_summer', 'season_moderate', 'season_winter'])
+
 const SCENARIOS = [
-  { id: 'grid_outage', restoreId: 'grid_restore', title: 'Grid outage', desc: 'Cut grid — EMERGENCY mode activates instantly' },
-  { id: 'cloud_cover', restoreId: 'cloud_restore', title: 'Cloud cover event', desc: 'Solar drops 60% — HYBRID activates automatically' },
-  { id: 'load_spike', restoreId: 'load_restore', title: 'Demand spike', desc: 'Add 30% extra load — brain rebalances sources' },
-  { id: 'season_summer', restoreId: 'season_reset', title: 'Jump to summer', desc: 'Peak solar season — irradiance up to 1,000 W/m²' },
-  { id: 'season_winter', restoreId: 'season_reset', title: 'Jump to winter', desc: 'Low solar period — grid dependency rises' },
-  { id: 'low_battery', restoreId: null, title: 'Low battery', desc: 'Force SOC near floor — CHARGE_MODE activates' },
+  { id: 'grid_outage',    restoreId: 'grid_restore',       title: 'Grid outage',        desc: 'Cut grid — EMERGENCY mode activates instantly',           group: null },
+  { id: 'cloud_cover',   restoreId: 'cloud_restore',      title: 'Cloud cover event',  desc: 'Solar drops 60% — HYBRID activates automatically',        group: null },
+  { id: 'load_spike',    restoreId: 'load_restore',       title: 'Demand spike',       desc: 'Add 30% extra load — brain rebalances sources',           group: null },
+  { id: 'season_summer', restoreId: 'season_reset',       title: 'Jump to summer',     desc: 'Peak solar season — irradiance up to 1,000 W/m²',         group: 'weather' },
+  { id: 'season_moderate',restoreId: 'season_reset',      title: 'Moderate weather',   desc: 'Spring/autumn conditions — balanced solar and load',       group: 'weather' },
+  { id: 'season_winter', restoreId: 'season_reset',       title: 'Jump to winter',     desc: 'Low solar period — grid dependency rises',                group: 'weather' },
+  { id: 'low_battery',   restoreId: 'low_battery_restore',title: 'Low battery',        desc: 'Force SOC near floor — CHARGE_MODE activates',            group: null },
 ]
 
 // ── Live cost comparison panel ────────────────────────────────────────────────
-// Compares cumulative cost paid to the grid WITH our system vs WITHOUT it.
-// withSystem  = simState.total_cost_sar (tracked by the brain each step)
-// withoutSystem = stepCount × cost_per_interval, where cost_per_interval
-//                 = monthly_bill / (30 days × 24 hr × 4 intervals/hr)
 function CostComparisonPanel({ simState, stepCount, monthlyBill }) {
+  const [showCalc, setShowCalc] = useState(false)
   if (!simState || stepCount === 0 || !monthlyBill) return null
 
-  const intervalBaseline = monthlyBill / (30 * 24 * 4)   // SAR per 15-min interval
+  const intervalBaseline = monthlyBill / (30 * 24 * 4)
   const withoutSystem    = +(stepCount * intervalBaseline).toFixed(2)
   const withSystem       = +(simState.total_cost_sar ?? 0).toFixed(2)
   const saved            = +(withoutSystem - withSystem).toFixed(2)
-  const savingPct        = withoutSystem > 0
-    ? +((saved / withoutSystem) * 100).toFixed(1)
-    : 0
-
-  // SVG bar chart — two horizontal bars growing proportionally
-  const maxVal  = Math.max(withoutSystem, withSystem, 1)
-  const BAR_W   = 320   // max bar width px
-  const redW    = Math.max(4, (withoutSystem / maxVal) * BAR_W)
-  const greenW  = Math.max(4, (withSystem   / maxVal) * BAR_W)
+  const savingPct        = withoutSystem > 0 ? +((saved / withoutSystem) * 100).toFixed(1) : 0
+  const maxVal           = Math.max(withoutSystem, withSystem, 1)
 
   const fmt = v => {
     if (v >= 1000) return `${(v / 1000).toFixed(2)}K SAR`
@@ -154,139 +148,98 @@ function CostComparisonPanel({ simState, stepCount, monthlyBill }) {
   }
 
   return (
-    <div style={{
-      background: '#fff', borderRadius: 10, border: '0.5px solid #D1D5DB',
-      padding: '16px 18px', marginBottom: 14,
-    }}>
-      {/* Title */}
-      <div style={{
-        fontSize: 13, fontWeight: 600, color: '#111827',
-        marginBottom: 12, paddingBottom: 8, borderBottom: '0.5px solid #E5E7EB',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
+    <div style={{ background: '#fff', borderRadius: 10, border: '0.5px solid #D1D5DB', padding: '16px 18px', marginBottom: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 12, paddingBottom: 8, borderBottom: '0.5px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Cumulative cost comparison — this session</span>
-        <span style={{
-          fontSize: 10, fontWeight: 700, background: '#E1F5EE', color: '#085041',
-          padding: '2px 8px', borderRadius: 10,
-        }}>
-          LIVE · updates every step
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => setShowCalc(o => !o)}
+            style={{ fontSize: 10, background: '#F4F6F8', border: '0.5px solid #D1D5DB', borderRadius: 6, padding: '3px 9px', cursor: 'pointer', color: '#6B7280' }}
+          >
+            {showCalc ? '▲' : '▼'} How calculated
+          </button>
+          <span style={{ fontSize: 10, fontWeight: 700, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 10 }}>
+            LIVE · updates every step
+          </span>
+        </div>
       </div>
 
-      {/* Savings headline */}
-      <div style={{
-        display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap',
-      }}>
-        <div style={{
-          flex: 1, minWidth: 140,
-          background: '#E1F5EE', borderRadius: 8, padding: '10px 14px',
-          border: '0.5px solid #9FE1CB',
-        }}>
-          <div style={{ fontSize: 10, color: '#085041', marginBottom: 3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Saved so far
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#085041' }}>
-            {fmt(Math.max(0, saved))}
-          </div>
-          <div style={{ fontSize: 10, color: '#1D9E75', marginTop: 2 }}>
-            {savingPct}% less than without the system
+      {/* How calculated collapsible */}
+      {showCalc && (
+        <div style={{ background: '#F9FAFB', border: '0.5px solid #E5E7EB', borderRadius: 8, padding: '12px 14px', marginBottom: 12, fontSize: 11 }}>
+          <div style={{ fontWeight: 600, color: '#111827', marginBottom: 8 }}>How we calculate each value</div>
+          {[
+            ['Without system (baseline)',
+              `${monthlyBill?.toLocaleString()} SAR ÷ (30 × 96 intervals) × ${stepCount} steps = ${fmt(withoutSystem)}`,
+              'Monthly bill divided into 15-min intervals. Represents what you would pay if the solar system did not exist.'],
+            ['With SolarBrain system',
+              `Actual cumulative grid purchases tracked by the switching brain = ${fmt(withSystem)}`,
+              'The brain logs every kWh pulled from the grid at its current tariff rate. This is the real cost paid to the utility.'],
+            ['Saved so far',
+              `${fmt(withoutSystem)} − ${fmt(withSystem)} = ${fmt(Math.max(0, saved))} (${savingPct}%)`,
+              'Difference between what you would have paid and what you actually paid. Grows whenever the brain uses solar or battery instead of the grid.'],
+          ].map(([label, calc, note]) => (
+            <div key={label} style={{ borderBottom: '0.5px solid #F3F4F6', paddingBottom: 7, marginBottom: 7 }}>
+              <div style={{ fontWeight: 600, color: '#374151', marginBottom: 2 }}>{label}</div>
+              <div style={{ fontFamily: 'monospace', color: '#185FA5', marginBottom: 2 }}>{calc}</div>
+              <div style={{ fontSize: 10, color: '#9CA3AF' }}>{note}</div>
+            </div>
+          ))}
+          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 4 }}>
+            Both values reset to zero when you click ↺ Reset. The comparison is session-scoped only.
           </div>
         </div>
-        <div style={{ flex: 1, minWidth: 120, textAlign: 'center', padding: '10px 0' }}>
+      )}
+
+      {/* Summary row */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 140, background: '#E1F5EE', borderRadius: 8, padding: '10px 14px', border: '0.5px solid #9FE1CB' }}>
+          <div style={{ fontSize: 10, color: '#085041', marginBottom: 3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saved so far</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#085041' }}>{fmt(Math.max(0, saved))}</div>
+          <div style={{ fontSize: 10, color: '#1D9E75', marginTop: 2 }}>{savingPct}% less than without the system</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 110, textAlign: 'center', padding: '10px 0' }}>
           <div style={{ fontSize: 10, color: '#6B7280', marginBottom: 3 }}>Steps completed</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>{stepCount}</div>
           <div style={{ fontSize: 10, color: '#9CA3AF' }}>× 15 min intervals</div>
         </div>
-        <div style={{ flex: 1, minWidth: 120, textAlign: 'center', padding: '10px 0' }}>
+        <div style={{ flex: 1, minWidth: 110, textAlign: 'center', padding: '10px 0' }}>
           <div style={{ fontSize: 10, color: '#6B7280', marginBottom: 3 }}>Baseline rate</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#374151' }}>{fmt(intervalBaseline)}</div>
           <div style={{ fontSize: 10, color: '#9CA3AF' }}>per 15-min interval</div>
         </div>
       </div>
 
-      {/* Bar chart */}
+      {/* Bars */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-        {/* Without system bar */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 11, color: '#A32D2D', fontWeight: 600 }}>
-              Without system (baseline utility bills)
-            </span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#A32D2D' }}>
-              {fmt(withoutSystem)}
-            </span>
+            <span style={{ fontSize: 11, color: '#A32D2D', fontWeight: 600 }}>Without system (baseline utility bills)</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#A32D2D' }}>{fmt(withoutSystem)}</span>
           </div>
-          <div style={{ height: 22, background: '#F4F6F8', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
-            <div style={{
-              height: '100%',
-              width: `${(withoutSystem / maxVal) * 100}%`,
-              background: 'rgba(162,45,45,0.75)',
-              borderRadius: 6,
-              transition: 'width 0.6s ease',
-              display: 'flex', alignItems: 'center',
-            }}>
-              {(withoutSystem / maxVal) > 0.25 && (
-                <span style={{ fontSize: 10, color: '#fff', fontWeight: 600, paddingLeft: 8 }}>
-                  {fmt(withoutSystem)}
-                </span>
-              )}
+          <div style={{ height: 22, background: '#F4F6F8', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(withoutSystem / maxVal) * 100}%`, background: 'rgba(162,45,45,0.75)', borderRadius: 6, transition: 'width 0.6s ease', display: 'flex', alignItems: 'center' }}>
+              {(withoutSystem / maxVal) > 0.25 && <span style={{ fontSize: 10, color: '#fff', fontWeight: 600, paddingLeft: 8 }}>{fmt(withoutSystem)}</span>}
             </div>
           </div>
         </div>
-
-        {/* With system bar */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 11, color: '#085041', fontWeight: 600 }}>
-              With SolarBrain system (actual grid draw)
-            </span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#085041' }}>
-              {fmt(withSystem)}
-            </span>
+            <span style={{ fontSize: 11, color: '#085041', fontWeight: 600 }}>With SolarBrain system (actual grid draw)</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#085041' }}>{fmt(withSystem)}</span>
           </div>
-          <div style={{ height: 22, background: '#F4F6F8', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
-            <div style={{
-              height: '100%',
-              width: `${(withSystem / maxVal) * 100}%`,
-              background: '#1D9E75',
-              borderRadius: 6,
-              transition: 'width 0.6s ease',
-              display: 'flex', alignItems: 'center',
-            }}>
-              {(withSystem / maxVal) > 0.25 && (
-                <span style={{ fontSize: 10, color: '#fff', fontWeight: 600, paddingLeft: 8 }}>
-                  {fmt(withSystem)}
-                </span>
-              )}
+          <div style={{ height: 22, background: '#F4F6F8', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(withSystem / maxVal) * 100}%`, background: '#1D9E75', borderRadius: 6, transition: 'width 0.6s ease', display: 'flex', alignItems: 'center' }}>
+              {(withSystem / maxVal) > 0.25 && <span style={{ fontSize: 10, color: '#fff', fontWeight: 600, paddingLeft: 8 }}>{fmt(withSystem)}</span>}
             </div>
           </div>
         </div>
-
-        {/* Gap / savings indicator */}
         {saved > 0 && (
-          <div style={{
-            marginTop: 2, padding: '6px 12px',
-            background: '#F0FBF7', borderRadius: 6,
-            border: '0.5px solid #9FE1CB',
-            fontSize: 11, color: '#085041',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          }}>
-            <span>
-              ↑ The system has reduced your grid cost by&nbsp;
-              <strong>{fmt(saved)}</strong> so far in this session
-            </span>
-            <span style={{ fontWeight: 700, color: '#1D9E75', fontSize: 12 }}>
-              −{savingPct}%
-            </span>
+          <div style={{ padding: '6px 12px', background: '#F0FBF7', borderRadius: 6, border: '0.5px solid #9FE1CB', fontSize: 11, color: '#085041', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>↑ System reduced your grid cost by <strong>{fmt(saved)}</strong> this session</span>
+            <span style={{ fontWeight: 700, color: '#1D9E75', fontSize: 12 }}>−{savingPct}%</span>
           </div>
         )}
-      </div>
-
-      <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 10, lineHeight: 1.5 }}>
-        Baseline = monthly bill ({monthlyBill?.toLocaleString()} SAR) ÷ (30 × 96 intervals/day) × steps elapsed.
-        With-system cost = actual cumulative grid purchases tracked by the switching brain.
-        Both reset when you click ↺ Reset.
       </div>
     </div>
   )
@@ -307,7 +260,6 @@ export default function SimulationView() {
   const intervalRef = useRef(null)
   const [isManual, setIsManual] = useState(false)
   const [activeScen, setActiveScen] = useState(new Set())
-  // Track number of simulation steps received — used for baseline cost accumulation
   const [stepCount, setStepCount] = useState(0)
 
   const userType = systemDesign?.profile?.user_type || 'facility'
@@ -406,6 +358,20 @@ export default function SimulationView() {
 
   // ── Scenario injection ────────────────────────────────────────────────────
   async function handleScenario(id) {
+    const sc = SCENARIOS.find(s => s.id === id)
+
+    // If this is a weather scenario, deactivate any other active weather scenario first
+    if (sc?.group === 'weather') {
+      setActiveScen(prev => {
+        const next = new Set(prev)
+        // Remove all other weather IDs from active set
+        WEATHER_SCENARIO_IDS.forEach(wid => { if (wid !== id) next.delete(wid) })
+        return next
+      })
+      // No need to call backend reset for weather — the brain replaces force_season
+      // on the next inject, so the previous weather is already overwritten.
+    }
+
     await injectScenario(id)
     setActiveScen(prev => {
       const next = new Set(prev)
@@ -418,7 +384,12 @@ export default function SimulationView() {
     await injectScenario(restoreId)
     setActiveScen(prev => {
       const next = new Set(prev)
-      next.delete(triggerId)
+      // If restoring a weather scenario, clear all weather IDs
+      if (WEATHER_SCENARIO_IDS.has(triggerId)) {
+        WEATHER_SCENARIO_IDS.forEach(wid => next.delete(wid))
+      } else {
+        next.delete(triggerId)
+      }
       return next
     })
   }
@@ -619,13 +590,40 @@ export default function SimulationView() {
         )}
       </div>
 
+      {/* Net metering (on-grid only) — above 24h chart */}
+      {systemDesign?.profile?.grid_scenario === 'on_grid' && (
+        <div style={{ ...S.card, borderColor: '#B5D4F4' }}>
+          <div style={S.cardTitle}>Net metering</div>
+          <div style={{ display: 'flex', gap: 24 }}>
+            <div>
+              <div style={S.kpiLabel}>Exporting to grid</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#185FA5' }}>
+                {(simState?.grid_export_kw ?? 0).toFixed(1)} kW
+              </div>
+              <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 3 }}>
+                Active when battery full and solar surplus
+              </div>
+            </div>
+            <div>
+              <div style={S.kpiLabel}>Revenue earned (session)</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#185FA5' }}>
+                {(simState?.total_net_meter_sar ?? 0).toFixed(2)} SAR
+              </div>
+              <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 3 }}>
+                @ {systemDesign?.profile?.user_type === 'residential' ? '0.09' : '0.12–0.16'} SAR/kWh export rate
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 24h history chart */}
       <div style={S.card}>
         <div style={S.cardTitle}>24-hour energy history</div>
         <HistoryChart />
       </div>
 
-      {/* Live cost comparison — cumulative grid cost with vs without the system */}
+      {/* Cumulative cost comparison — live, updates every step */}
       <CostComparisonPanel
         simState={simState}
         stepCount={stepCount}
@@ -710,32 +708,6 @@ export default function SimulationView() {
         </div>
       </div>
 
-      {/* Net metering (on-grid only) */}
-      {systemDesign?.profile?.grid_scenario === 'on_grid' && (
-        <div style={{ ...S.card, borderColor: '#B5D4F4' }}>
-          <div style={S.cardTitle}>Net metering</div>
-          <div style={{ display: 'flex', gap: 24 }}>
-            <div>
-              <div style={S.kpiLabel}>Exporting to grid</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#185FA5' }}>
-                {(simState?.grid_export_kw ?? 0).toFixed(1)} kW
-              </div>
-              <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 3 }}>
-                Active when battery full and solar surplus
-              </div>
-            </div>
-            <div>
-              <div style={S.kpiLabel}>Revenue earned (session)</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#185FA5' }}>
-                {(simState?.total_net_meter_sar ?? 0).toFixed(2)} SAR
-              </div>
-              <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 3 }}>
-                @ {systemDesign?.profile?.user_type === 'residential' ? '0.09' : '0.12–0.16'} SAR/kWh export rate
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   )
